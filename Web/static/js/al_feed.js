@@ -329,7 +329,6 @@ function openJsSettings() {
     const CURRENT_AUTO_SCROLL = Number(localStorage.getItem('ux.auto_scroll') ?? 1)
     const CURRENT_DISABLE_AJAX = Number(localStorage.getItem('ux.disable_ajax_routing') ?? 0)
 
-    u("#_js_settings td").remove()
     u("#_js_settings").append(`
         <tr>
             <td width="120" valign="top">
@@ -351,10 +350,16 @@ function openJsSettings() {
                 <label for='ux.auto_scroll'>${tr('auto_scroll')}</label>
             </td>
         </tr>    
+        <tr>
+            <td width="120" valign="top"></td>
+            <td>
+                <a href="javascript:openPluginSettings()">${tr('ui_settings_window')}</a>
+            </td>
+        </tr>  
     `)
 }
 
-
+// i hate it. Why there is >5 report functions ????????????
 function reportPost(postId) {
             uReportMsgTxt  = tr("going_to_report_post");
             uReportMsgTxt += "<br/>"+tr("report_question_text");

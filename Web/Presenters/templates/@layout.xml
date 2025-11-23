@@ -57,7 +57,7 @@
 
         <div class="notifications_global_wrap"></div>
         <div class="dimmer">
-            <div id='absolute_territory'></div>
+            <div id='clickable'></div>
         </div>
         <div class="upLeftErrors"></div>
 
@@ -89,12 +89,12 @@
             </div>
         {/if}
 
-        <div class="toTop">
+        <div class="toTop hidden">
             <div id='to_up'>
                 <svg id="to_up_icon" viewBox="0 0 10 6"><polygon points="0 6 5 0 10 6 0 6"/></svg>
                 <span>{_to_top}</span>
             </div>
-            
+
             <div id='to_back'>
                 <svg id="to_back_icon" viewBox="0 0 10 6"><polygon points="0 0 5 6 10 0 0 0"/></svg>
             </div>
@@ -197,7 +197,7 @@
                                 </object>
                             </a>
                             <a href="/settings" class="link">{_my_settings}</a>
-                            
+
                             {if $thisUser->getLeftMenuItemStatus('docs') || $thisUser->getLeftMenuItemStatus('apps')}
                                 <div class="menu_divider"></div>
                                 <a n:if="$thisUser->getLeftMenuItemStatus('apps')" href="/apps?act=installed" class="link">{_apps}</a>
@@ -207,20 +207,23 @@
 
                             {var $canAccessAdminPanel = $thisUser->getChandlerUser()->can("access")->model("admin")->whichBelongsTo(NULL)}
                             {var $canAccessHelpdesk   = $thisUser->getChandlerUser()->can("write")->model('openvk\Web\Models\Entities\TicketReply')->whichBelongsTo(0)}
+                            {var $canAccessReports    = $thisUser->getChandlerUser()->can("admin")->model('openvk\Web\Models\Entities\Report')->whichBelongsTo(0)}
+                            {var $canAccessNsp        = $thisUser->getChandlerUser()->can("write")->model('openvk\Web\Models\Entities\Ban')->whichBelongsTo(0)}
+
                             {var $menuLinksAvaiable   = sizeof(OPENVK_ROOT_CONF['openvk']['preferences']['menu']['links']) > 0 && $thisUser->getLeftMenuItemStatus('links')}
-                            <div n:if="$canAccessAdminPanel || $canAccessHelpdesk || $menuLinksAvaiable" class="menu_divider"></div>
+                            <div n:if="$canAccessAdminPanel || $canAccessHelpdesk || $canAccessReports || $canAccessNsp || $menuLinksAvaiable" class="menu_divider"></div>
                             <a href="/admin" class="link" n:if="$canAccessAdminPanel" title="{_admin} [Alt+Shift+A]" accesskey="a" rel="nofollow">{_admin}</a>
                             <a href="/support/tickets" class="link" n:if="$canAccessHelpdesk">{_helpdesk}
                                 {if $helpdeskTicketNotAnsweredCount > 0}
                                     (<b>{$helpdeskTicketNotAnsweredCount}</b>)
                                 {/if}
                             </a>
-                            <a n:if="$canAccessHelpdesk" href="/scumfeed" class="link" rel="nofollow">{tr("reports")}
+                            <a n:if="$canAccessReports" href="/scumfeed" class="link" rel="nofollow">{tr("reports")}
                                 {if $reportNotAnsweredCount > 0}
                                     (<b>{$reportNotAnsweredCount}</b>)
                                 {/if}
                             </a>
-                            <a n:if="$canAccessHelpdesk" href="/noSpam" class="link" rel="nofollow">
+                            <a n:if="$canAccessNsp" href="/noSpam" class="link" rel="nofollow">
                                 noSpam
                             </a>
                         <a
@@ -259,7 +262,7 @@
                                 <text>
                                     {var $bdayListHtml = ''}
                                     {foreach $bdayUsers as $u}
-                                        {var $bdayListHtml .= '<a href="/id' . $u->getId() . '">' . $u->getFirstName() . ' ' . $u->getLastName() . '</a>'}
+                                        {var $bdayListHtml .= '<a href="/id' . $u->getId() . '">' . $u->getMorphedName(startWithLastName: false) . '</a>'}
                                         {if $bdayCount == 2}
                                             {if $iterator->isFirst()}{var $bdayListHtml .= tr("bday_and")}{/if}
                                         {elseif $bdayCount != 1}
@@ -273,14 +276,14 @@
                                     {tr("bday_reminder_text", $isBdayToday ? tr("bday_today") : tr("bday_tomorrow"), $bdayListHtml)|noescape}
                                 </text>
                             </div>
-                            
+
                             <div n:if="OPENVK_ROOT_CONF['openvk']['preferences']['commerce'] && $thisUser->getCoins() != 0" id="votesBalance">
                                 {tr("you_still_have_x_points", $thisUser->getCoins())|noescape}
                                 <br /><br />
-                                
+
                                 <a href="/settings?act=finance">{_top_up_your_account} &#xbb;</a>
                             </div>
-                            
+
                             <a n:if="OPENVK_ROOT_CONF['openvk']['preferences']['adPoster']['enable'] && $thisUser->getLeftMenuItemStatus('poster')" href="{php echo OPENVK_ROOT_CONF['openvk']['preferences']['adPoster']['link']}" >
                                 <img src="{php echo OPENVK_ROOT_CONF['openvk']['preferences']['adPoster']['src']}" alt="{php echo OPENVK_ROOT_CONF['openvk']['preferences']['adPoster']['caption']}" class="psa-poster" style="max-width: 100%; margin-top: 10px;" />
                             </a>
@@ -428,6 +431,7 @@
         {script "js/al_music.js"}
         {script "js/al_despacito_wall.js"}
         {script "js/al_photos.js"}
+        {script "js/options.js"}
 
         {ifset $thisUser}
             {script "js/al_notifs.js"}
@@ -438,16 +442,16 @@
         {script "js/node_modules/leaflet-control-geocoder/dist/Control.Geocoder.js"}
         {css "js/node_modules/leaflet/dist/leaflet.css"}
         {css "js/node_modules/leaflet-control-geocoder/dist/Control.Geocoder.css"}
-        
+
         <script>bsdnHydrate();</script>
 
         <script n:if="OPENVK_ROOT_CONF['openvk']['telemetry']['plausible']['enable']" async defer data-domain="{php echo OPENVK_ROOT_CONF['openvk']['telemetry']['plausible']['domain']}" src="{php echo OPENVK_ROOT_CONF['openvk']['telemetry']['plausible']['server']}js/plausible.js"></script>
-        
+
         <script n:if="OPENVK_ROOT_CONF['openvk']['telemetry']['piwik']['enable']">
             {var $piwik = (object) OPENVK_ROOT_CONF['openvk']['telemetry']['piwik']}
-            
+
             //<![CDATA[
-            (function(window,document,dataLayerName,id){ 
+            (function(window,document,dataLayerName,id){
             window[dataLayerName]=window[dataLayerName]||[],window[dataLayerName].push({ start:(new Date).getTime(),event:"stg.start" });var scripts=document.getElementsByTagName('script')[0],tags=document.createElement('script');
             function stgCreateCookie(a,b,c){ var d="";if(c){ var e=new Date;e.setTime(e.getTime()+24*c*60*60*1e3),d=";expires="+e.toUTCString() }document.cookie=a+"="+b+d+";path=/" }
             var isStgDebug=(window.location.href.match("stg_debug")||document.cookie.match("stg_debug"))&&!window.location.href.match("stg_disable_debug");stgCreateCookie("stg_debug",isStgDebug?1:"",isStgDebug?14:-1);
@@ -457,7 +461,7 @@
              })(window,document,{$piwik->layer}, {$piwik->site});
             //]]>
         </script>
-        
+
         <script n:if="OPENVK_ROOT_CONF['openvk']['telemetry']['matomo']['enable']">
             {var $matomo = (object) OPENVK_ROOT_CONF['openvk']['telemetry']['matomo']}
             //<![CDATA[
@@ -500,4 +504,4 @@
     <!-- INCLUDING TEMPLATE FROM PARENTMODULE: {$parentModule} -->
 
     {include content}
-{/if} 
+{/if}
