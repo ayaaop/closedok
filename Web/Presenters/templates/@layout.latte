@@ -241,9 +241,9 @@
                                 <a n:foreach="$thisUser->getPinnedClubs() as $pinnedclub" href="{$pinnedclub->getURL()}" class="link group_link">
                                     {ovk_proc_strtr($pinnedclub->getName(), 14)}
 
-                                    <object type="internal/link" style="white-space: normal;" id="sug{$pinnedclub->getId()}" n:if="$pinnedclub->getSuggestedPostsCount($thisUser) > 0 && $club->getWallType() == 2">
+                                    <object type="internal/link" style="white-space: normal;" id="sug{$pinnedclub->getId()}" n:if="$pinnedclub->getSuggestedPostsCount($thisUser) > 0 && $pinnedclub->getWallType() == 2">
                                         <a href="/club{$pinnedclub->getId()}/suggested" class="linkunderline">
-                                            (<b>{$club->getSuggestedPostsCount($thisUser)}</b>)
+                                            (<b>{$pinnedclub->getSuggestedPostsCount($thisUser)}</b>)
                                         </a>
                                     </object>
                                 </a>
@@ -485,7 +485,7 @@
                 "at_search": {$atSearch ?? false},
                 "max_attachments": {\OPENVK_ROOT_CONF["openvk"]["preferences"]["wall"]["postSizes"]["maxAttachments"] ?? 10},
                 "max_filesize_mb": 100,
-                "current_id": {$thisUser ? $thisUser->getId() : 0},
+                "current_id": {ifset $thisUser}{$thisUser->getId()}{else}0{/ifset},
                 "disable_ajax": {$disable_ajax ?? 0},
                 "max_add_fields": {ovkGetQuirk("users.max-fields")},
                 "docs_max": {\OPENVK_ROOT_CONF["openvk"]["preferences"]["docs"]["maxSize"]},
