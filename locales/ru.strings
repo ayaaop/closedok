@@ -1337,6 +1337,7 @@
 "enter_message" = "Введите сообщение";
 "messages_error_1" = "Сообщение не доставлено";
 "messages_error_1_description" = "При отправке этого сообщения произошла ошибка общего характера...";
+"message_user_typing" = "$1 набирает сообщение...";
 
 /* Polls */
 "poll" = "Опрос";
@@ -1630,6 +1631,7 @@
 "admin_tab_main" = "Главное";
 "admin_tab_ban" = "Блокировка";
 "admin_tab_followers" = "Участники";
+"admin_tab_sessions" = "Сессии";
 "admin_overview" = "Обзор";
 "admin_overview_summary" = "Сводка";
 "admin_content" = "Пользовательский контент";
