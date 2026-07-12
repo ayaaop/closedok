@@ -323,8 +323,7 @@ final class Wall extends VKAPIRequestHandler
     public function getById(string $posts, int $extended = 0, string $fields = "", User $user = null)
     {
         if ($user == null) {
-            $this->requireUser();
-            $user = $this->getUser(); # костыли костыли крылышки
+            $user = $this->getUser();
         }
 
         $items    = [];
@@ -443,7 +442,7 @@ final class Wall extends VKAPIRequestHandler
                     ],
                     "likes" => (object) [
                         "count"       => $post->getLikesCount(),
-                        "user_likes"  => (int) $post->hasLikeFrom($user),
+                        "user_likes"  => $user !== null ? (int) $post->hasLikeFrom($user) : 0,
                         "can_like"    => 1,
                         "can_publish" => 1,
                     ],
@@ -866,6 +865,7 @@ final class Wall extends VKAPIRequestHandler
 
         $items = [];
         $profiles = [];
+        $groups = [];
 
         foreach ($comments as $comment) {
             $owner = $comment->getOwner();
@@ -929,7 +929,11 @@ final class Wall extends VKAPIRequestHandler
 
             $items[] = $item;
             if ($extended == true) {
-                $profiles[] = $comment->getOwner()->getId();
+                if ($comment->getOwner()->getId() > 0) {
+                    $profiles[] = $comment->getOwner()->getId();
+                } else {
+                    $groups[] = $comment->getOwner()->getId() * -1;
+                }
             }
 
             $attachments = null;
@@ -947,7 +951,9 @@ final class Wall extends VKAPIRequestHandler
 
         if ($extended == true) {
             $profiles = array_unique($profiles);
+            $groups   = array_unique($groups);
             $response['profiles'] = (!empty($profiles) ? (new Users())->get(implode(',', $profiles), $fields) : []);
+            $response['groups']   = (!empty($groups) ? (new Groups())->get(implode(',', $groups), $fields) : []);
         }
 
         return (object) $response;
@@ -968,6 +974,7 @@ final class Wall extends VKAPIRequestHandler
         }
 
         $profiles = [];
+        $groups = [];
 
         $attachments = [];
 
@@ -1035,7 +1042,9 @@ final class Wall extends VKAPIRequestHandler
 
         if ($extended == true) {
             $profiles = array_unique($profiles);
+            $groups   = array_unique($groups);
             $response['profiles'] = (!empty($profiles) ? (new Users())->get(implode(',', $profiles), $fields) : []);
+            $response['groups']   = (!empty($groups) ? (new Groups())->get(implode(',', $groups), $fields) : []);
         }
 
         return $response;
