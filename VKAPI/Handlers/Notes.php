@@ -115,6 +115,33 @@ final class Notes extends VKAPIRequestHandler
         return 1;
     }
 
+    public function deleteComment(int $comment_id, int $owner_id = 0): int
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $comment = (new CommentsRepo())->get($comment_id);
+        $target = $comment?->getTarget();
+        if (!$target instanceof Note || ($owner_id && $target->getOwner()->getRealId() !== $owner_id) ||
+            $comment->isDeleted() || !$comment->canBeDeletedBy($this->getUser())) {
+            $this->fail(100, "Invalid comment or access denied");
+        }
+        (new \openvk\Web\Models\Restoration())->delete($comment, $this->getUser());
+        return 1;
+    }
+
+    public function restoreComment(int $comment_id, int $owner_id = 0, ?string $restore_token = null): int
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $comment = (new CommentsRepo())->get($comment_id);
+        $target = $comment?->getTarget();
+        if (!$target instanceof Note || ($owner_id && $target->getOwner()->getRealId() !== $owner_id)) {
+            $this->fail(100, "Invalid comment or owner");
+        }
+        $this->restoreDeleted($comment, $restore_token);
+        return 1;
+    }
+
     public function edit(string $note_id, string $title = "", string $text = "", int $privacy = 0, int $comment_privacy = -1, string $privacy_view  = "", string $privacy_comment  = "")
     {
         $this->requireUser();

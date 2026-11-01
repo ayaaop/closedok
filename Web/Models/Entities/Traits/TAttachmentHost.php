@@ -32,7 +32,7 @@ trait TAttachmentHost
             $repo     = new $repoName();
 
             $attachment = $repo->get($rel->attachable_id);
-            if ($attachment instanceof Post && $attachment->isDeleted()) {
+            if (!$attachment || $attachment->isDeleted()) {
                 continue;
             }
 

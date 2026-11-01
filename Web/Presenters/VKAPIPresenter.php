@@ -19,10 +19,21 @@ final class VKAPIPresenter extends OpenVKPresenter
     private ?string $currentObject = null;
     private ?string $currentMethod = null;
 
+    private function safeRequestParams(array $params): array
+    {
+        $safe = [];
+        foreach ($params as $key => $value) {
+            $safe[$key] = in_array(strtolower((string) $key), [
+                "access_token", "sid", "restore_token", "hash", "password", "code", "authorization", "secret",
+            ], true) ? "[REDACTED]" : (is_array($value) ? $this->safeRequestParams($value) : $value);
+        }
+        return $safe;
+    }
+
     private function logRequest(string $object, string $method): void
     {
         $date   = date(DATE_COOKIE);
-        $params = json_encode($_REQUEST);
+        $params = json_encode($this->safeRequestParams($_REQUEST));
         $log    = "[$date] $object.$method called with $params\r\n";
         file_put_contents(OPENVK_ROOT . "/VKAPI/debug.log", $log, FILE_APPEND | LOCK_EX);
     }
@@ -48,7 +59,10 @@ final class VKAPIPresenter extends OpenVKPresenter
         ];
 
         foreach ($_GET as $key => $value) {
-            array_unshift($payload["request_params"], [ "key" => $key, "value" => $value ]);
+            array_unshift($payload["request_params"], [
+                "key" => $key,
+                "value" => $this->safeRequestParams([$key => $value])[$key],
+            ]);
         }
 
         if (\VKAPI_DECL_VER !== \VKAPI_OVK_APP) {

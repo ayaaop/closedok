@@ -7,6 +7,8 @@ namespace openvk\Web\Presenters;
 use openvk\Web\Models\Entities\Video;
 use openvk\Web\Models\Repositories\{Users, Clubs, Videos};
 use Nette\InvalidStateException as ISE;
+use Chandler\Session\Session;
+use openvk\Web\Models\Restoration;
 
 final class VideosPresenter extends OpenVKPresenter
 {
@@ -197,23 +199,48 @@ final class VideosPresenter extends OpenVKPresenter
     public function renderRemove(int $owner, int $vid): void
     {
         $this->assertUserLoggedIn();
-        $this->willExecuteWriteAction();
+        $this->willExecuteWriteAction(true);
+        if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+            $this->throwError(405, "Method Not Allowed", "POST required.");
+        }
+        $this->assertNoCSRF();
 
-        $video = $this->videos->getByOwnerAndVID($owner, $vid);
-        if (!$video) {
+        $video = $this->videos->getForRestore($owner, $vid);
+        if (!$video || $video->isDeleted()) {
             $this->notFound();
         }
         $user = $this->user->id;
 
-        if (!is_null($user)) {
-            if ($video->canBeModifiedBy($this->user->identity)) {
-                $video->deleteVideo($owner, $vid);
-            }
-        } else {
+        if (is_null($user) || !($video->canBeModifiedBy($this->user->identity) ||
+            ($video->hasContext() && $video->getOwner()->canBeModifiedBy($this->user->identity)))) {
             $this->flashFail("err", tr("cant_delete_video"), tr("cant_delete_video_comment"));
         }
 
-        $this->redirect("/videos" . $owner);
+        $event = (new Restoration())->delete($video, $this->user->identity);
+        $this->returnJson([
+            "success" => true,
+            "restore_token" => $event === null ? null : (new Restoration())->token($event, $this->user->identity, Session::i()->get("tok")),
+        ]);
+    }
+
+    public function renderRestore(int $owner, int $vid): void
+    {
+        $this->assertUserLoggedIn();
+        $this->willExecuteWriteAction(true);
+        if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+            $this->throwError(405, "Method Not Allowed", "POST required.");
+        }
+        $this->assertNoCSRF();
+        $video = $this->videos->getForRestore($owner, $vid);
+        if (!$video) {
+            $this->notFound();
+        }
+        try {
+            (new Restoration())->restore($video, $this->user->identity, $this->postParam("restore_token") ?? "", Session::i()->get("tok"));
+        } catch (\DomainException $e) {
+            $this->throwError(403, "Forbidden", tr("error_access_denied"));
+        }
+        $this->returnJson(["success" => true]);
     }
 
     public function renderLike(int $owner, int $video_id): void

@@ -34,3 +34,13 @@ export async function loginAsCharlie(page: Page): Promise<void> {
   await page.click('#fastLogin input[type="submit"]');
   await page.waitForURL(/\/charlie/);
 }
+
+export async function getTestApiToken(page: Page, username = 'alice@test.local'): Promise<string> {
+  const response = await page.request.post('/token', {
+    form: { grant_type: 'password', username, password: 'test123', client_name: 'e2e' },
+  });
+  if (!response.ok()) throw new Error(`API login failed: ${response.status()}`);
+  const result = await response.json();
+  if (!result.access_token) throw new Error('API login returned no access token');
+  return result.access_token;
+}

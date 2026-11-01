@@ -549,13 +549,13 @@ final class Photos extends VKAPIRequestHandler
                 return 0;
             }
 
-            $photo = (new PhotosRepo())->getByOwnerAndVIDUnsafe($owner_id, $photo_id);
-            if (!$photo || $photo->isDeleted() || !$photo->canBeModifiedBy($this->getUser())) {
+            $photo = (new PhotosRepo())->getForRestore($owner_id, $photo_id);
+            if (!$photo || $photo->isDeleted() || !($photo->canBeModifiedBy($this->getUser()) ||
+                ($photo->hasContext() && $photo->getOwner()->canBeModifiedBy($this->getUser())))) {
                 return 1;
             }
 
-            $photo->isolate();
-            $photo->delete();
+            (new \openvk\Web\Models\Restoration())->delete($photo, $this->getUser());
         } else {
             $photos_list = array_unique(explode(',', $photos));
             if (sizeof($photos_list) > 10) {
@@ -564,16 +564,29 @@ final class Photos extends VKAPIRequestHandler
 
             foreach ($photos_list as $photo_id) {
                 $id = explode("_", $photo_id);
-                $photo = (new PhotosRepo())->getByOwnerAndVIDUnsafe((int) $id[0], (int) $id[1]);
-                if (!$photo || $photo->isDeleted() || !$photo->canBeModifiedBy($this->getUser())) {
+                $photo = (new PhotosRepo())->getForRestore((int) $id[0], (int) $id[1]);
+                if (!$photo || $photo->isDeleted() || !($photo->canBeModifiedBy($this->getUser()) ||
+                    ($photo->hasContext() && $photo->getOwner()->canBeModifiedBy($this->getUser())))) {
                     continue;
                 }
 
-                $photo->isolate();
-                $photo->delete();
+                (new \openvk\Web\Models\Restoration())->delete($photo, $this->getUser());
             }
         }
 
+        return 1;
+    }
+
+    public function restore(int $photo_id, int $owner_id = 0, ?string $restore_token = null): int
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $owner_id = $owner_id ?: $this->getUser()->getId();
+        $photo = (new PhotosRepo())->getForRestore($owner_id, $photo_id);
+        if (!$photo) {
+            $this->fail(15, "Photo not found");
+        }
+        $this->restoreDeleted($photo, $restore_token);
         return 1;
     }
 
@@ -596,6 +609,33 @@ final class Photos extends VKAPIRequestHandler
 
         return 1;
     }*/
+
+    public function deleteComment(int $comment_id, int $owner_id = 0): int
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $comment = (new CommentsRepo())->get($comment_id);
+        $target = $comment?->getTarget();
+        if (!$target instanceof Photo || ($owner_id && $target->getOwner()->getRealId() !== $owner_id) ||
+            $comment->isDeleted() || !$comment->canBeDeletedBy($this->getUser())) {
+            $this->fail(21, "Invalid comment or access denied");
+        }
+        (new \openvk\Web\Models\Restoration())->delete($comment, $this->getUser());
+        return 1;
+    }
+
+    public function restoreComment(int $comment_id, int $owner_id = 0, ?string $restore_token = null): int
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $comment = (new CommentsRepo())->get($comment_id);
+        $target = $comment?->getTarget();
+        if (!$target instanceof Photo || ($owner_id && $target->getOwner()->getRealId() !== $owner_id)) {
+            $this->fail(21, "Invalid comment or owner");
+        }
+        $this->restoreDeleted($comment, $restore_token);
+        return 1;
+    }
 
     public function createComment(int $owner_id, int $photo_id, string $message = "", bool $from_group = false, ?int $reply_to_comment = null, int $sticker_id = 0, string $attachments = "")
     {

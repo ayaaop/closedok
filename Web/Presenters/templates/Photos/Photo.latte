@@ -69,7 +69,7 @@
                 <div class='media-page-wrapper-actions'>
                     {include "../components/postable/postable_mark.latte", owner => $owner, item => $photo}
 
-                    <div n:if="isset($thisUser) && $thisUser->getId() === $photo->getOwner()->getId()">
+                    <div n:if="isset($thisUser) && ($photo->canBeModifiedBy($thisUser) || ($photo->hasContext() && $photo->getOwner()->canBeModifiedBy($thisUser)))">
                         <a onclick="edit_photo(event)" href="/photo{$photo->getPrettyId()}/edit" class="profile_link" style="display:block;width:96%;">{_edit}</a>
                         <a id="_photoDelete" href="/photo{$photo->getPrettyId()}/delete" class="profile_link" style="display:block;width:96%;">{_delete}</a>
                     </div>

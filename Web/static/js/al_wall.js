@@ -535,11 +535,10 @@ class PhotoViewer extends Viewer {
 
     async deleteItem(element) {
         const ids = element.id.split("_");
-
-        await window.OVKAPI.call("photos.delete", {
-            "owner_id": ids[0],
-            "photo_id": ids[1],
-        });
+        const form = new FormData();
+        form.append("hash", window.router.csrf);
+        const response = await fetch(`/photo${ids[0]}_${ids[1]}/delete`, { method: "POST", body: form });
+        if (!response.ok || !(await response.json()).success) throw new Error(String(response.status));
     }
 
     static async openById(ids, event = null) {
@@ -945,13 +944,11 @@ class VideoViewer extends Viewer {
     }
 
     async deleteItem(element) {
-        console.log(element)
         const ids = element.id.split("_");
-
-        await window.OVKAPI.call("video.delete", {
-            "owner_id": ids[0],
-            "video_id": ids[1],
-        });
+        const form = new FormData();
+        form.append("hash", window.router.csrf);
+        const response = await fetch(`/video${ids[0]}_${ids[1]}/remove`, { method: "POST", body: form });
+        if (!response.ok || !(await response.json()).success) throw new Error(String(response.status));
     }
 }
 
@@ -1491,7 +1488,75 @@ $(document).on("click", "#_wallDelete", function (e) {
     return e.preventDefault();
 });
 
-$(document).on("click", "#_photoDelete, #_videoDelete, #_anotherDelete", function (e) {
+$(document).on("click", "#_photoDelete, #_videoDelete", async function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const link = this;
+    if (link.dataset.deletePending) return;
+    link.dataset.deletePending = "1";
+    const form = new FormData();
+    form.append("hash", window.router.csrf);
+    form.append("ajax", "1");
+
+    try {
+        const response = await fetch(link.href, { method: "POST", body: form });
+        if (!response.ok) throw new Error(String(response.status));
+        const data = await response.json();
+        if (!data.success) throw new Error(data.flash?.message || String(response.status));
+
+        const modal = link.closest(".ovk-msg-all");
+        const viewer = modal ? find_msgbox_by_node(modal)?._viewer : null;
+        const type = link.id === "_photoDelete" ? "photo" : "video";
+        const placeholder = document.createElement("span");
+        placeholder.className = "post-deleted";
+        placeholder.append(document.createTextNode(tr(type + "_is_deleted") + " "));
+
+        if (data.restore_token) {
+            const restore = document.createElement("a");
+            restore.href = link.href.replace(/\/(?:delete|remove)$/, "/restore");
+            restore.textContent = tr("restore");
+            restore.addEventListener("click", async (event) => {
+                event.preventDefault();
+                if (restore.dataset.restorePending) return;
+                restore.dataset.restorePending = "1";
+                try {
+                    const ids = link.href.match(/\/(?:photo|video)(-?\d+)_(\d+)\//);
+                    const restored = await window.OVKAPI.call(type === "photo" ? "photos.restore" : "video.restore", {
+                        owner_id: ids[1],
+                        [type + "_id"]: ids[2],
+                        restore_token: data.restore_token,
+                    });
+                    if (restored !== 1) throw new Error(tr("error"));
+                    placeholder.replaceWith(link);
+                    if (viewer?.currentItem) {
+                        viewer.currentItem.deleted = false;
+                        viewer.currentItem.cached = null;
+                        viewer._updFrame(viewer.currentItem);
+                    }
+                } catch (error) {
+                    fastError(String(error));
+                } finally {
+                    delete restore.dataset.restorePending;
+                }
+            });
+            placeholder.append(restore);
+        }
+
+        link.replaceWith(placeholder);
+        if (viewer?.currentItem) {
+            viewer.currentItem.deleted = true;
+            viewer.currentItem.cached = null;
+            viewer._updFrame(viewer.currentItem);
+        }
+    } catch (error) {
+        fastError(String(error));
+    } finally {
+        delete link.dataset.deletePending;
+    }
+});
+
+$(document).on("click", "#_anotherDelete", function (e) {
     // мне интересно зачем было писать именно так
     var formHtml = "<form id='tmpPhDelF' action='" + u(this).attr("href") + "' >";
     formHtml += "<input type='hidden' name='hash' value='" + u("meta[name=csrf]").attr("value") + "' />";
@@ -4366,7 +4431,37 @@ async function ajax_delete(event) {
             }
             restore.dataset.pending = "1";
             try {
-                await request(restore.href, data.restore_token);
+                const ids = link.href.match(/\/wall(-?\d+)_(\d+)\/delete/);
+                if (ids) {
+                    const restored = await window.OVKAPI.call("wall.restore", {
+                        owner_id: ids[1],
+                        post_id: ids[2],
+                        restore_token: data.restore_token,
+                    });
+                    if (restored !== 1) throw new Error(tr("error"));
+                } else {
+                    const methods = {
+                        posts: "wall.restoreComment",
+                        photos: "photos.restoreComment",
+                        videos: "video.restoreComment",
+                        topics: "board.restoreComment",
+                        notes: "notes.restoreComment",
+                    };
+                    const method = methods[link.dataset.restoreModel];
+                    if (method) {
+                        const restored = await window.OVKAPI.call(method, {
+                            comment_id: post.dataset.commentId,
+                            ...(method === "board.restoreComment" ? {
+                                group_id: link.dataset.restoreGroup,
+                                topic_id: link.dataset.restoreTopic,
+                            } : {}),
+                            restore_token: data.restore_token,
+                        });
+                        if (restored !== 1) throw new Error(tr("error"));
+                    } else {
+                        await request(restore.href, data.restore_token);
+                    }
+                }
                 placeholder.replaceWith(post);
                 if (pageMeta) {
                     pageMeta.style.display = pageMetaDisplay;

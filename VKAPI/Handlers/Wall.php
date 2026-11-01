@@ -1335,15 +1335,31 @@ final class Wall extends VKAPIRequestHandler
 
         $comment_id = $comment_id ?: $cid;
         $comment = (new CommentsRepo())->get($comment_id);
-        if (!$comment) {
+        if (!$comment || !($comment->getTarget() instanceof Post)) {
             $this->fail(100, "One of the parameters specified was missing or invalid");
         };
         if (!$comment->canBeDeletedBy($this->user)) {
             $this->fail(7, "Access denied");
         }
 
-        $comment->delete();
+        if ($owner_id && $comment->getTarget() instanceof Post && $comment->getTarget()->getTargetWall() !== $owner_id) {
+            $this->fail(100, "Invalid owner_id");
+        }
+        (new \openvk\Web\Models\Restoration())->delete($comment, $this->user);
 
+        return 1;
+    }
+
+    public function restoreComment(int $comment_id = 0, int $owner_id = 0, ?string $restore_token = null)
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $comment = (new CommentsRepo())->get($comment_id);
+        if (!$comment || !($comment->getTarget() instanceof Post) ||
+            ($owner_id && $comment->getTarget()->getTargetWall() !== $owner_id)) {
+            $this->fail(100, "Invalid comment_id or owner_id");
+        }
+        $this->restoreDeleted($comment, $restore_token);
         return 1;
     }
 
@@ -1369,13 +1385,27 @@ final class Wall extends VKAPIRequestHandler
         }
 
         if ($post->getOwnerPost() == $this->getUser()->getId() || $post->getTargetWall() == $this->getUser()->getId() || $owner_id < 0 && $wallOwner->canBeModifiedBy($this->getUser())) {
-            $post->unwire();
-            $post->delete();
+            (new \openvk\Web\Models\Restoration())->delete($post, $this->user);
 
             return 1;
         } else {
             $this->fail(15, "Access denied");
         }
+    }
+
+    public function restore(int $owner_id = 0, int $post_id = 0, ?string $restore_token = null)
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        if ($owner_id === 0) {
+            $owner_id = $this->getUser()->getId();
+        }
+        $post = (new PostsRepo())->getPostById($owner_id, $post_id, true);
+        if (!$post || $post->getTargetWall() !== $owner_id) {
+            $this->fail(15, "Not found");
+        }
+        $this->restoreDeleted($post, $restore_token);
+        return 1;
     }
 
     public function edit(int $owner_id, int $post_id, string $message = "", string $attachments = "", ?string $copyright = null, int $explicit = -1, int $from_group = 0, int $signed = 0)

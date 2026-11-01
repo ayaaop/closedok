@@ -90,6 +90,7 @@ abstract class MediaCollection extends Postable
     public function fetchClassic(int $offset = 0, ?int $limit = null, bool $rev = false): \Traversable
     {
         $related = $this->getRecord()->related("$this->relTableName.collection")
+            ->where("media", DatabaseConnection::i()->getContext()->table($this->entityTableName)->select("id")->where("deleted", 0))
             ->limit($limit ?? OPENVK_DEFAULT_PER_PAGE, $offset);
 
         if ($rev == true) {
@@ -118,7 +119,9 @@ abstract class MediaCollection extends Postable
 
     public function size(): int
     {
-        return $this->getRecord()->related("$this->relTableName.collection")->count("*");
+        return $this->getRecord()->related("$this->relTableName.collection")
+            ->where("media", DatabaseConnection::i()->getContext()->table($this->entityTableName)->select("id")->where("deleted", 0))
+            ->count("*");
     }
 
     public function getCreationTime(): DateTime

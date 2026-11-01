@@ -303,6 +303,17 @@ INSERT INTO polls (id, owner, title, allows_multiple, is_anonymous, can_revote, 
 INSERT INTO polls (id, owner, title, allows_multiple, is_anonymous, can_revote, until, ended, deleted) VALUES
 (2, 2, 'Best OS?', b'0', b'0', b'1', @ts_base - 1 * @ts_day, b'1', b'0');
 
+INSERT INTO polls (id, owner, title, allows_multiple, is_anonymous, can_revote, until, ended, deleted) VALUES
+(3, 2, 'Poll restoration fixture', b'0', b'0', b'0', NULL, b'0', b'0');
+
+INSERT INTO posts (id, owner, wall, virtual_id, created, edited, content, flags, nsfw, ad, deleted, suggested, archived) VALUES
+(90, 2, 2, 90, @ts_base - 1 * @ts_hour, NULL, 'Poll restore fixture A', NULL, 0, 0, 0, 0, 1),
+(91, 2, 2, 91, @ts_base - 1 * @ts_hour, NULL, 'Poll restore fixture B', NULL, 0, 0, 0, 0, 1);
+
+INSERT INTO attachments (target_type, target_id, attachable_type, attachable_id) VALUES
+('openvk\\Web\\Models\\Entities\\Post', 90, 'openvk\\Web\\Models\\Entities\\Poll', 3),
+('openvk\\Web\\Models\\Entities\\Post', 91, 'openvk\\Web\\Models\\Entities\\Poll', 3);
+
 INSERT INTO poll_options (id, poll, name) VALUES
 (1, 1, 'PHP'),
 (2, 1, 'Python'),
@@ -310,7 +321,9 @@ INSERT INTO poll_options (id, poll, name) VALUES
 (4, 1, 'Rust'),
 (5, 2, 'Linux'),
 (6, 2, 'Windows'),
-(7, 2, 'macOS');
+(7, 2, 'macOS'),
+(8, 3, 'Option A'),
+(9, 3, 'Option B');
 
 INSERT INTO poll_votes (id, user, poll, option) VALUES
 (3, 2, 2, 5),
@@ -435,4 +448,3 @@ ALTER TABLE gift_categories_locales AUTO_INCREMENT = 100;
 ALTER TABLE gift_relations    AUTO_INCREMENT = 100;
 ALTER TABLE gift_user_relations AUTO_INCREMENT = 100;
 ALTER TABLE coin_vouchers     AUTO_INCREMENT = 100;
-

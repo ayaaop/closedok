@@ -8,6 +8,7 @@ namespace openvk;
 use Chandler\Cron\Scheduler;
 use Chandler\Cron\CronRunner;
 use openvk\CLI\CleanupPendingUploadsCommand;
+use openvk\CLI\CleanupRestoreEventsCommand;
 use openvk\CLI\FetchToncoinTransactions;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\ConsoleOutput;
@@ -20,6 +21,11 @@ $scheduler = Scheduler::i();
 $scheduler->command(CleanupPendingUploadsCommand::class, "executeCleanup", "cleanups.pending_uploads")
     ->description("Cleanup pending photo uploads older than 24 hours")
     ->hourly()
+    ->withoutOverlapping();
+
+$scheduler->command(CleanupRestoreEventsCommand::class, "executeCleanup", "cleanups.restore_events")
+    ->description("Cleanup expired restore references")
+    ->everyMinutes(5)
     ->withoutOverlapping();
 
 $scheduler->call(function (): void {

@@ -7,6 +7,8 @@ namespace openvk\Web\Presenters;
 use openvk\Web\Models\Entities\{Club, Photo, Album, User};
 use openvk\Web\Models\Repositories\{Photos, Albums, Users, Clubs};
 use Nette\InvalidStateException as ISE;
+use Chandler\Session\Session;
+use openvk\Web\Models\Restoration;
 
 final class PhotosPresenter extends OpenVKPresenter
 {
@@ -467,32 +469,47 @@ final class PhotosPresenter extends OpenVKPresenter
     public function renderDeletePhoto(int $ownerId, int $photoId): void
     {
         $this->assertUserLoggedIn();
-        $this->willExecuteWriteAction($_SERVER["REQUEST_METHOD"] === "POST");
+        $this->willExecuteWriteAction(true);
+        if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+            $this->throwError(405, "Method Not Allowed", "POST required.");
+        }
         $this->assertNoCSRF();
 
-        $photo = $this->photos->getByOwnerAndVID($ownerId, $photoId);
-        if (!$photo) {
+        $photo = $this->photos->getForRestore($ownerId, $photoId);
+        if (!$photo || $photo->isDeleted()) {
             $this->notFound();
         }
-        if (is_null($this->user->identity) || $this->user->id != $ownerId) {
+        if ($photo->isSystem() || is_null($this->user->identity) ||
+            !($photo->canBeModifiedBy($this->user->identity) ||
+                ($photo->hasContext() && $photo->getOwner()->canBeModifiedBy($this->user->identity)))) {
             $this->flashFail("err", tr("error_access_denied_short"), tr("error_access_denied"));
         }
 
-        if (!is_null($album = $photo->getAlbum())) {
-            $redirect = '/album' . $album->getPrettyId();
-        } else {
-            $redirect = "/id0";
+        $event = (new Restoration())->delete($photo, $this->user->identity);
+        $this->returnJson([
+            "success" => true,
+            "restore_token" => $event === null ? null : (new Restoration())->token($event, $this->user->identity, Session::i()->get("tok")),
+        ]);
+    }
+
+    public function renderRestorePhoto(int $ownerId, int $photoId): void
+    {
+        $this->assertUserLoggedIn();
+        $this->willExecuteWriteAction(true);
+        if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+            $this->throwError(405, "Method Not Allowed", "POST required.");
         }
-
-        $photo->isolate();
-        $photo->delete();
-
-        if ($_SERVER["REQUEST_METHOD"] === "POST") {
-            $this->returnJson(["success" => true]);
+        $this->assertNoCSRF();
+        $photo = $this->photos->getForRestore($ownerId, $photoId);
+        if (!$photo) {
+            $this->notFound();
         }
-
-        $this->flash("succ", tr("photo_is_deleted"), tr("photo_is_deleted_desc"));
-        $this->redirect($redirect);
+        try {
+            (new Restoration())->restore($photo, $this->user->identity, $this->postParam("restore_token") ?? "", Session::i()->get("tok"));
+        } catch (\DomainException $e) {
+            $this->throwError(403, "Forbidden", tr("error_access_denied"));
+        }
+        $this->returnJson(["success" => true]);
     }
 
     public function renderLike(int $wall, int $post_id): void

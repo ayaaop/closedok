@@ -23,7 +23,10 @@ abstract class Attachable extends RowModel
             $repoName = str_replace("Entities", "Repositories", $repoName);
             $repo     = new $repoName();
 
-            yield $repo->get($rel->target_id);
+            $parent = $repo->get($rel->target_id);
+            if ($parent && !$parent->isDeleted()) {
+                yield $parent;
+            }
         }
     }
 

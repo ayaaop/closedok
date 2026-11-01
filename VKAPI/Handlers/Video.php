@@ -208,15 +208,29 @@ final class Video extends VKAPIRequestHandler
             $this->fail(-40, "Videos cannot be collected at this moment.");
         }
 
-        $video = (new VideosRepo())->getByOwnerAndVIDUnsafe($owner_id, $video_id);
+        $video = (new VideosRepo())->getForRestore($owner_id, $video_id);
 
-        if (!$video || $video->isDeleted() || !$video->canBeModifiedBy($this->getUser())) {
+        if (!$video || $video->isDeleted() || !($video->canBeModifiedBy($this->getUser()) ||
+            ($video->hasContext() && $video->getOwner()->canBeModifiedBy($this->getUser())))) {
             $this->fail(14, "Access denied");
         }
 
         # $video->isolate();
-        $video->delete();
+        (new \openvk\Web\Models\Restoration())->delete($video, $this->getUser());
 
+        return 1;
+    }
+
+    public function restore(int $video_id, int $owner_id = 0, ?string $restore_token = null): int
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $owner_id = $owner_id ?: $this->getUser()->getId();
+        $video = (new VideosRepo())->getForRestore($owner_id, $video_id);
+        if (!$video) {
+            $this->fail(15, "Video not found");
+        }
+        $this->restoreDeleted($video, $restore_token);
         return 1;
     }
 
@@ -439,10 +453,26 @@ final class Video extends VKAPIRequestHandler
 
         $cId = $comment_id ?: $cid;
         $comment = (new CommentsRepo())->get($cId);
-        if ($comment && $comment->canBeDeletedBy($this->getUser())) {
-            $comment->delete();
+        $target = $comment?->getTarget();
+        if ($target instanceof VideoEntity && (!$owner_id || $target->getOwner()->getRealId() === $owner_id) &&
+            (!$video_id || $target->getCompromiseVirtualId() === $video_id) && !$comment->isDeleted() &&
+            $comment->canBeDeletedBy($this->getUser())) {
+            (new \openvk\Web\Models\Restoration())->delete($comment, $this->getUser());
         }
 
+        return 1;
+    }
+
+    public function restoreComment(int $comment_id, int $owner_id = 0, ?string $restore_token = null): int
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $comment = (new CommentsRepo())->get($comment_id);
+        $target = $comment?->getTarget();
+        if (!$target instanceof VideoEntity || ($owner_id && $target->getOwner()->getRealId() !== $owner_id)) {
+            $this->fail(100, "Invalid comment or owner");
+        }
+        $this->restoreDeleted($comment, $restore_token);
         return 1;
     }
 }

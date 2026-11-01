@@ -41,6 +41,16 @@ class Videos
         return $this->toVideo($video);
     }
 
+    public function getForRestore(int $owner, int $vId): ?Video
+    {
+        $video = $owner > 0
+            ? $this->videos->where(["owner" => $owner, "virtual_id" => $vId])->fetch()
+            : $this->videos->where(["context_id" => $owner, "context_vid" => $vId])->fetch()
+                ?? $this->videos->where(["owner" => $owner, "virtual_id" => $vId])->fetch();
+        $item = $this->toVideo($video);
+        return $item && ($owner < 0 || !$item->hasContext()) ? $item : null;
+    }
+
     public function getByOwnerAndVID(int $owner, int $vId, ?string $access_key = null, bool $skipKey = false): ?Video
     {
         $video = null;

@@ -7,6 +7,9 @@ namespace openvk\VKAPI\Handlers;
 use openvk\VKAPI\Exceptions\APIErrorException;
 use openvk\Web\Models\Entities\IP;
 use openvk\Web\Models\Entities\User;
+use openvk\Web\Models\Entities\Attachable;
+use openvk\Web\Models\Restoration;
+use Chandler\Session\Session;
 use openvk\Web\Models\Repositories\IPs;
 use openvk\Web\Util\RateLimiter;
 
@@ -50,6 +53,24 @@ abstract class VKAPIRequestHandler
     {
         if (!$this->userAuthorized()) {
             $this->fail(5, "User authorization failed: no access_token passed.");
+        }
+    }
+
+    protected function restoreDeleted(Attachable $item, ?string $restore_token = null): void
+    {
+        $this->requireUser();
+        $session = null;
+        if (($_GET["auth_mechanism"] ?? "") === "roaming") {
+            if (($_SERVER["REQUEST_METHOD"] ?? "") !== "POST" || !($GLOBALS["csrfCheck"] ?? false) || !$restore_token) {
+                $this->fail(15, "A valid page restore token and CSRF are required.");
+            }
+            $session = Session::i()->get("tok");
+        }
+
+        try {
+            (new Restoration())->restore($item, $this->getUser(), $session === null ? null : $restore_token, $session);
+        } catch (\DomainException | \LogicException $e) {
+            $this->fail(15, $e->getMessage());
         }
     }
 

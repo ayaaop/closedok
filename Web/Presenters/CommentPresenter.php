@@ -8,6 +8,8 @@ use openvk\Web\Models\Entities\{Comment, Notifications\MentionNotification, Noti
 use openvk\Web\Models\Entities\Notifications\CommentNotification;
 use openvk\Web\Models\Repositories\{Comments, Clubs, Videos, Photos, Audios};
 use Nette\InvalidStateException as ISE;
+use Chandler\Session\Session;
+use openvk\Web\Models\Restoration;
 
 final class CommentPresenter extends OpenVKPresenter
 {
@@ -250,12 +252,10 @@ final class CommentPresenter extends OpenVKPresenter
             $this->flashFail("err", tr("error"), tr("forbidden"), 0, $isAjax);
         }
 
+        $event = (new Restoration())->delete($comment, $this->user->identity);
         if ($isAjax) {
-            $comment->deletePreservingReferences();
-            $restoreToken = $this->makeRestoreToken(Comment::class, $id);
+            $restoreToken = (new Restoration())->token($event, $this->user->identity, Session::i()->get("tok"));
             $this->returnJson(["success" => true, "restore_token" => $restoreToken]);
-        } else {
-            $comment->delete();
         }
         $this->flashFail(
             "succ",
@@ -288,8 +288,11 @@ final class CommentPresenter extends OpenVKPresenter
             $this->throwError(403, "Forbidden", tr("error_access_denied"));
         }
 
-        $this->assertRestoreToken($comment);
-        $comment->undelete();
+        try {
+            (new Restoration())->restore($comment, $this->user->identity, $this->postParam("restore_token") ?? "", Session::i()->get("tok"));
+        } catch (\DomainException $e) {
+            $this->throwError(403, "Forbidden", tr("error_access_denied"));
+        }
         $this->returnJson(["success" => true]);
     }
 }

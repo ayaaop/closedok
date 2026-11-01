@@ -210,6 +210,35 @@ final class Board extends VKAPIRequestHandler
         return 1;
     }
 
+    public function deleteComment(int $group_id, int $topic_id, int $comment_id): int
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $topic = (new TopicsRepo())->getTopicById($group_id, $topic_id);
+        $comment = (new CommentsRepo())->get($comment_id);
+        if (!$topic || !$comment || $comment->getTarget()?->getId() !== $topic->getId() ||
+            !($comment->getTarget() instanceof Topic) || $comment->isDeleted() ||
+            !$comment->canBeDeletedBy($this->getUser())) {
+            $this->fail(100, "Invalid comment or access denied");
+        }
+        (new \openvk\Web\Models\Restoration())->delete($comment, $this->getUser());
+        return 1;
+    }
+
+    public function restoreComment(int $group_id, int $topic_id, int $comment_id, ?string $restore_token = null): int
+    {
+        $this->requireUser();
+        $this->willExecuteWriteAction();
+        $topic = (new TopicsRepo())->getTopicById($group_id, $topic_id);
+        $comment = (new CommentsRepo())->get($comment_id);
+        if (!$topic || !$comment || !($comment->getTarget() instanceof Topic) ||
+            $comment->getTarget()->getId() !== $topic->getId()) {
+            $this->fail(100, "Invalid comment");
+        }
+        $this->restoreDeleted($comment, $restore_token);
+        return 1;
+    }
+
     public function editTopic(int $group_id, int $topic_id, string $title)
     {
         $this->requireUser();

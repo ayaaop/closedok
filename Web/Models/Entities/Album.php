@@ -48,7 +48,12 @@ class Album extends MediaCollection
             }
         }
 
-        return (new Photos())->get($cover);
+        $photo = (new Photos())->get($cover);
+        if ($photo && !$photo->isDeleted()) {
+            return $photo;
+        }
+
+        return iterator_to_array($this->getPhotos(1, 1))[0] ?? null;
     }
 
     public function getPhotos(int $page = 1, ?int $perPage = null, bool $rev = false): \Traversable

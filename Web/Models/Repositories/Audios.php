@@ -86,7 +86,9 @@ class Audios
     public function getByEntityID(int $entity, int $offset = 0, ?int $limit = null, ?int& $deleted = nullptr): \Traversable
     {
         $limit ??= OPENVK_DEFAULT_PER_PAGE;
-        $iter = $this->rels->where("entity", $entity)->limit($limit, $offset)->order("index DESC");
+        $iter = (clone $this->rels)->where("entity", $entity)
+            ->where("audio", (clone $this->audios)->select("id")->where("deleted", 0))
+            ->limit($limit, $offset)->order("index DESC");
         foreach ($iter as $rel) {
             $audio = $this->get($rel->audio);
             if (!$audio || $audio->isDeleted()) {
@@ -164,17 +166,18 @@ class Audios
 
     public function getCollectionSizeByEntityId(int $id): int
     {
-        return sizeof($this->rels->where("entity", $id));
+        return sizeof((clone $this->rels)->where("entity", $id)
+            ->where("audio", (clone $this->audios)->select("id")->where("deleted", 0)));
     }
 
     public function getUserCollectionSize(User $user): int
     {
-        return sizeof($this->rels->where("entity", $user->getId()));
+        return $this->getCollectionSizeByEntityId($user->getId());
     }
 
     public function getClubCollectionSize(Club $club): int
     {
-        return sizeof($this->rels->where("entity", $club->getId() * -1));
+        return $this->getCollectionSizeByEntityId($club->getId() * -1);
     }
 
     public function getUserPlaylistsCount(User $user): int

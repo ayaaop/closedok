@@ -13,6 +13,8 @@ use openvk\Web\Models\Repositories\Audios;
 use openvk\Web\Models\Repositories\Clubs;
 use openvk\Web\Models\Repositories\Users;
 use openvk\Web\Util\Cache;
+use openvk\Web\Models\Restoration;
+use Chandler\Session\Session;
 
 final class AudioPresenter extends OpenVKPresenter
 {
@@ -623,7 +625,7 @@ final class AudioPresenter extends OpenVKPresenter
 
         $audio = $this->audios->get($audio_id);
 
-        if (!$audio || $audio->isDeleted()) {
+        if (!$audio || ($audio->isDeleted() && $this->queryParam("act") !== "restore_deleted")) {
             $this->flashFail("err", "error", tr("invalid_audio"), null, true);
         }
 
@@ -643,9 +645,24 @@ final class AudioPresenter extends OpenVKPresenter
 
             case "remove":
                 if ($audio->isInLibraryOf($this->user->identity)) {
-                    $audio->remove($this->user->identity);
+                    $event = (new Restoration())->deleteAudioFromLibrary($audio, $this->user->identity, $this->user->identity);
+                    $this->returnJson([
+                        "success" => true,
+                        "restore_token" => (new Restoration())->token($event, $this->user->identity, Session::i()->get("tok")),
+                    ]);
                 } else {
                     $this->flashFail("err", "error", tr("do_not_have_audio"), null, true);
+                }
+
+                break;
+            case "restore":
+                try {
+                    (new Restoration())->restoreAudioToLibrary(
+                        $audio, $this->user->identity, $this->user->identity,
+                        $this->postParam("restore_token") ?? "", Session::i()->get("tok")
+                    );
+                } catch (\DomainException $e) {
+                    $this->flashFail("err", "error", tr("error_access_denied"), null, true);
                 }
 
                 break;
@@ -657,9 +674,28 @@ final class AudioPresenter extends OpenVKPresenter
                 }
 
                 if ($audio->isInLibraryOf($club)) {
-                    $audio->remove($club);
+                    $event = (new Restoration())->deleteAudioFromLibrary($audio, $this->user->identity, $club);
+                    $this->returnJson([
+                        "success" => true,
+                        "restore_token" => (new Restoration())->token($event, $this->user->identity, Session::i()->get("tok")),
+                    ]);
                 } else {
                     $this->flashFail("err", "error", tr("group_hasnt_audio"), null, true);
+                }
+
+                break;
+            case "restore_club":
+                $club = (new Clubs())->get((int) $this->postParam("club"));
+                if (!$club || !$club->canBeModifiedBy($this->user->identity)) {
+                    $this->flashFail("err", "error", tr("access_denied"), null, true);
+                }
+                try {
+                    (new Restoration())->restoreAudioToLibrary(
+                        $audio, $this->user->identity, $club,
+                        $this->postParam("restore_token") ?? "", Session::i()->get("tok")
+                    );
+                } catch (\DomainException $e) {
+                    $this->flashFail("err", "error", tr("error_access_denied"), null, true);
                 }
 
                 break;
@@ -732,11 +768,24 @@ final class AudioPresenter extends OpenVKPresenter
                 break;
             case "delete":
                 if ($audio->canBeModifiedBy($this->user->identity)) {
-                    $audio->delete();
+                    $event = (new Restoration())->delete($audio, $this->user->identity);
+                    $this->returnJson([
+                        "success" => true,
+                        "restore_token" => $event === null ? null : (new Restoration())->token($event, $this->user->identity, Session::i()->get("tok")),
+                    ]);
                 } else {
                     $this->flashFail("err", "error", tr("access_denied"), null, true);
                 }
 
+                break;
+            case "restore_deleted":
+                try {
+                    (new Restoration())->restore(
+                        $audio, $this->user->identity, $this->postParam("restore_token") ?? "", Session::i()->get("tok")
+                    );
+                } catch (\DomainException $e) {
+                    $this->flashFail("err", "error", tr("error_access_denied"), null, true);
+                }
                 break;
             case "edit":
                 $audio = $this->audios->get($audio_id);

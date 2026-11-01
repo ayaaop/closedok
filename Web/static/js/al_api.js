@@ -95,6 +95,9 @@ window.OVKAPI = new class {
                 form_data.append(fd[0], fd[1])
             }
         })
+        if (params?.restore_token && /^(wall|photos|video|audio|board|notes)\.restore(?:Comment)?$/.test(method)) {
+            form_data.append("hash", window.router.csrf)
+        }
 
         const __url_params = new URLSearchParams
         __url_params.append("v", api_version)

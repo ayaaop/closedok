@@ -71,6 +71,15 @@ class Photos
         return $this->toPhoto($photo);
     }
 
+    public function getForRestore(int $owner, int $vId): ?Photo
+    {
+        $criteria = $owner > 0
+            ? ["owner" => $owner, "virtual_id" => $vId]
+            : ["context_id" => $owner, "context_vid" => $vId];
+        $photo = $this->toPhoto($this->photos->where($criteria)->where("system", 0)->fetch());
+        return $photo && ($owner < 0 || !$photo->hasContext()) ? $photo : null;
+    }
+
     public function getByOwnerAndVID(int $owner, int $vId, ?string $access_key = null, ?int $relId = null): ?Photo
     {
         $photo = $this->getByOwnerAndVIDUnsafe($owner, $vId);

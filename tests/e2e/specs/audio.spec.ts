@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures.js';
-import { loginAsAlice } from '../helpers.js';
+import { getTestApiToken, loginAsAlice } from '../helpers.js';
 
 test.describe('Audio', () => {
   test.beforeEach(async ({ page }) => {
@@ -33,5 +33,42 @@ test.describe('Audio', () => {
         page.locator('.page_footer p'),
       ],
     });
+  });
+
+  test('restores a track removed from the library', async ({ page }) => {
+    await page.goto('/audios2');
+    const track = page.locator('.audioEmbed[data-realid="1"]');
+    await track.locator('.audioEntry').hover();
+    await track.locator('.remove-icon').click();
+    const deleted = page.locator('.post-deleted').filter({ hasText: 'Audio has been deleted' });
+    await expect(deleted.getByText('Restore')).toBeVisible();
+    await expect(deleted).toHaveScreenshot('deleted-audio.png');
+    await deleted.getByText('Restore').click();
+    await expect(track.locator('.remove-icon')).toBeVisible();
+
+    const token = await getTestApiToken(page);
+    const call = async (method: string) =>
+      (await page.request.post(`/method/${method}`, {
+        form: { owner_id: '2', audio_id: '1', access_token: token },
+      })).json();
+    expect((await call('audio.delete')).response).toBe(1);
+    expect((await call('audio.restore')).response?.id).toBe(1);
+    await page.reload();
+    await expect(track.locator('.remove-icon')).toHaveCount(1);
+  });
+
+  test('restores a fully deleted track from the player', async ({ page }) => {
+    await page.goto('/audios2');
+    const track = page.locator('.audioEmbed[data-realid="2"]');
+    await track.locator('.audioEntry').hover();
+    await track.locator('.edit-icon').click();
+    await page.locator('.ovk-diag-body #_fullyDeleteAudio').click();
+
+    const deleted = page.locator('.post-deleted').filter({ hasText: 'Audio has been deleted' });
+    await expect(deleted.getByText('Restore')).toBeVisible();
+    await deleted.getByText('Restore').click();
+    await expect(track.locator('.edit-icon')).toBeVisible();
+    await page.reload();
+    await expect(track).toBeVisible();
   });
 });

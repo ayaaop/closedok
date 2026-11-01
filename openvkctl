@@ -14,6 +14,7 @@ $application->add(new CLI\UpgradeCommand());
 $application->add(new CLI\RebuildImagesCommand());
 $application->add(new CLI\FetchToncoinTransactions());
 $application->add(new CLI\CleanupPendingUploadsCommand());
+$application->add(new CLI\CleanupRestoreEventsCommand());
 $application->add(new CLI\GenerateUsersCommand());
 
 $application->run();

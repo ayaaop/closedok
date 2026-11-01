@@ -572,8 +572,8 @@ class Viewer {
     _updFrame(item) {}
     async setCurrentEntryDeleted(state) {
         const el = this.currentItem;
-        el.deleted = true;
         await this.deleteItem(el);
+        el.deleted = state;
         this._updFrame(el);
     }
     async deleteItem(element) {}

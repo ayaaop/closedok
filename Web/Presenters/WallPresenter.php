@@ -12,6 +12,8 @@ use openvk\Web\Util\Cache;
 use openvk\Web\Models\Search\Feed;
 use openvk\Web\Models\Search\CustomFeeds;
 use Chandler\Database\DatabaseConnection;
+use Chandler\Session\Session;
+use openvk\Web\Models\Restoration;
 use Nette\InvalidStateException as ISE;
 
 final class WallPresenter extends OpenVKPresenter
@@ -701,13 +703,9 @@ final class WallPresenter extends OpenVKPresenter
                 $this->flashFail("err", tr("failed_to_delete_post"), tr("forbidden"), null, $isAjax);
             }
 
-            if ($isAjax) {
-                $postId = $post->getId();
-                $post->deletePreservingReferences();
-                $restoreToken = $this->makeRestoreToken(Post::class, $postId);
-            } else {
-                $post->unwire();
-                $post->delete();
+            $event = (new Restoration())->delete($post, $this->user->identity);
+            if ($isAjax && $event !== null) {
+                $restoreToken = (new Restoration())->token($event, $this->user->identity, Session::i()->get("tok"));
             }
         } else {
             $this->flashFail("err", tr("failed_to_delete_post"), tr("login_required_error_comment"), null, $isAjax);
@@ -740,8 +738,11 @@ final class WallPresenter extends OpenVKPresenter
             $this->throwError(403, "Forbidden", tr("error_access_denied"));
         }
 
-        $this->assertRestoreToken($post);
-        $post->undelete();
+        try {
+            (new Restoration())->restore($post, $this->user->identity, $this->postParam("restore_token") ?? "", Session::i()->get("tok"));
+        } catch (\DomainException $e) {
+            $this->throwError(403, "Forbidden", tr("error_access_denied"));
+        }
         $this->returnJson(["success" => true]);
     }
 

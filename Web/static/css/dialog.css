@@ -270,6 +270,10 @@ body.manyMsgs .ovk-msg-all.msgbox-stacked-hidden {
 .ovk-photo-view-dimmer.viewer-deleted #ovk-photo-img,
 .ovk-photo-view-dimmer.viewer-deleted .ovk-photo-details {
     filter: opacity(0.5);
+}
+
+.ovk-photo-view-dimmer.viewer-deleted:not(.ovk-post-viewer-dimmer) .media-page-wrapper-comments,
+.ovk-photo-view-dimmer.viewer-deleted:not(.ovk-post-viewer-dimmer) .profile_link {
     pointer-events: none;
 }
 
@@ -1113,7 +1117,6 @@ body.manyMsgs .ovk-msg-all.msgbox-stacked-hidden {
 
 .ovk-video-view-dimmer.viewer-deleted #playerHtml,
 .ovk-video-view-dimmer.viewer-deleted #ovk-player-info {
-    pointer-events: none;
     filter: opacity(0.7);
 }
 

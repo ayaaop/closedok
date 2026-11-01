@@ -28,39 +28,6 @@ abstract class OpenVKPresenter extends SimplePresenter
     protected $user = null;
     protected $presenterName;
 
-    private function restoreToken(string $model, int $id): ?string
-    {
-        // Bind the token to the latest delete/restore event so an old token cannot undo a later deletion.
-        $event = DatabaseConnection::i()->getContext()->table("ChandlerLogs")
-            ->where("object_model", $model)
-            ->where("object_id", $id)
-            ->where("type", [2, 3])
-            ->order("id DESC")
-            ->fetch();
-
-        if (!$event || (int) $event->type !== 2) {
-            return null;
-        }
-
-        $data = implode(":", [$model, $id, $this->user->id, Session::i()->get("tok"), $event->id]);
-
-        return hash_hmac("sha256", $data, CHANDLER_ROOT_CONF["security"]["secret"]);
-    }
-
-    protected function makeRestoreToken(string $model, int $id): string
-    {
-        return $this->restoreToken($model, $id) ?? "";
-    }
-
-    protected function assertRestoreToken(Post $item): void
-    {
-        $token = $this->postParam("restore_token") ?? "";
-        $expected = $this->restoreToken(get_class($item), $item->getId());
-        if (!$expected || !hash_equals($expected, $token)) {
-            $this->throwError(403, "Forbidden", tr("error_access_denied"));
-        }
-    }
-
     private function calculateQueryString(array $data): string
     {
         $rawUrl = "tcp+stratum://fakeurl.net$_SERVER[REQUEST_URI]"; #HTTP_HOST can be tainted

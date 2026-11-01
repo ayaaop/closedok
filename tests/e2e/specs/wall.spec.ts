@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures.js';
-import { loginAsAlice, loginAsCharlie } from '../helpers.js';
+import { getTestApiToken, loginAsAlice, loginAsCharlie } from '../helpers.js';
+import { execFileSync } from 'child_process';
 
 test.describe('Wall', () => {
   test.beforeEach(async ({ page }) => {
@@ -130,15 +131,15 @@ test.describe('Wall', () => {
     const deleted = page.locator('.post-deleted').filter({ hasText: 'Post was removed.' });
     await expect(deleted).toBeVisible();
 
-    await page.route('**/wall2_2/restore', route => route.fulfill({
+    await page.route('**/method/wall.restore?**', route => route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ success: false, flash: { message: 'Restore failed' } }),
+      body: JSON.stringify({ error: { error_code: 15, error_msg: 'Restore failed' } }),
     }));
     await deleted.getByText('Restore').click();
     await expect(page.locator('.ovk-diag-body').filter({ hasText: 'Restore failed' })).toBeVisible();
     await expect(deleted.getByText('Restore')).toBeVisible();
-    await page.unroute('**/wall2_2/restore');
+    await page.unroute('**/method/wall.restore?**');
     await page.locator('.ovk-diag-action button').first().click();
     await deleted.getByText('Restore').click();
     await expect(post).toBeVisible();
@@ -167,6 +168,44 @@ test.describe('Wall', () => {
     expect(result).toEqual([403, 403, 200, 403, 200]);
   });
 
+  test('requires page proof and CSRF for roaming API restores', async ({ page }) => {
+    await page.goto('/wall2');
+    const result = await page.evaluate(async () => {
+      const csrf = (window as any).router.csrf;
+      const remove = async () => {
+        const body = new FormData();
+        body.append('hash', csrf);
+        body.append('ajax', '1');
+        return (await (await fetch('/wall2_2/delete', { method: 'POST', body })).json()).restore_token;
+      };
+      const restore = async (token?: string, hash?: string, method = 'POST') => {
+        const body = new FormData();
+        body.append('owner_id', '2');
+        body.append('post_id', '2');
+        if (token) body.append('restore_token', token);
+        if (hash) body.append('hash', hash);
+        const url = '/method/wall.restore?auth_mechanism=roaming';
+        const query = new URLSearchParams();
+        body.forEach((value, key) => query.append(key, String(value)));
+        const response = await fetch(method === 'POST' ? url : `${url}&${query}`, {
+          method,
+          ...(method === 'POST' ? { body } : {}),
+        });
+        return (await response.json()).response ?? null;
+      };
+      const first = await remove();
+      const missing = await restore(undefined, csrf);
+      const noCsrf = await restore(first);
+      const get = await restore(first, csrf, 'GET');
+      const restored = await restore(first, csrf);
+      const second = await remove();
+      const stale = await restore(first, csrf);
+      const latest = await restore(second, csrf);
+      return [missing, noCsrf, get, restored, stale, latest];
+    });
+    expect(result).toEqual([null, null, null, 1, null, 1]);
+  });
+
   test('requires CSRF for AJAX comment deletion', async ({ page }) => {
     await page.goto('/wall2_3');
     const status = await page.evaluate(async () => {
@@ -177,6 +216,45 @@ test.describe('Wall', () => {
     expect(status).toBe(400);
     await page.reload();
     await expect(page.locator('#_comment3')).toBeVisible();
+  });
+
+  test('restores posts and comments through the VK API with permission and expiry checks', async ({ page }) => {
+    const token = await getTestApiToken(page);
+    const call = async (method: string, params: Record<string, string>) =>
+      (await page.request.post(`/method/${method}?v=5.86`, { form: { ...params, access_token: token } })).json();
+
+    expect((await call('wall.delete', { owner_id: '2', post_id: '2' })).response).toBe(1);
+    await page.goto('/wall2');
+    await expect(page.locator('.post_microblog[data-id="2_2"]')).toHaveCount(0);
+    expect((await call('wall.restore', { owner_id: '2', post_id: '2' })).response).toBe(1);
+    const duplicateRestore = await call('wall.restore', { owner_id: '2', post_id: '2' });
+    expect(duplicateRestore.error?.error_code ?? duplicateRestore.error_code, JSON.stringify(duplicateRestore)).toBe(15);
+    await page.reload();
+    await expect(page.locator('.post_microblog[data-id="2_2"]')).toBeVisible();
+
+    await page.goto('/wall2_3');
+    await page.locator('#_comment2 a[href="/comment2/delete"]').click();
+    const other = await getTestApiToken(page, 'charlie@test.local');
+    const denied = await page.request.post('/method/wall.restoreComment?v=5.86', {
+      form: { owner_id: '2', comment_id: '2', access_token: other },
+    });
+    expect((await denied.json()).error?.error_code).toBe(15);
+    expect((await call('wall.restoreComment', { owner_id: '2', comment_id: '2' })).response).toBe(1);
+    await page.reload();
+    await expect(page.locator('#_comment2')).toBeVisible();
+
+    await page.goto('/wall2');
+    await page.locator('.post_microblog[data-id="2_2"] a[href="/wall2_2/delete"]').click();
+    execFileSync('mysql', [
+      '-h', process.env.DB_HOST || 'mariadb-primary',
+      '-u', process.env.DB_USER || 'openvk',
+      '--ssl-mode=DISABLED',
+      process.env.DB_NAME || 'db',
+      '-e', "UPDATE restore_events SET expires_at = 1 WHERE item = 2 AND kind LIKE '%Post' AND state = 0",
+    ], { env: { ...process.env, MYSQL_PWD: process.env.DB_PASSWORD || 'openvk' } });
+    expect((await call('wall.restore', { owner_id: '2', post_id: '2' })).error?.error_code).toBe(15);
+    await page.locator('.post-deleted').getByText('Restore').click();
+    await expect(page.locator('.post-deleted').getByText('Restore')).toBeVisible();
   });
 });
 

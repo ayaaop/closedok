@@ -161,6 +161,15 @@ abstract class Media extends Postable
         parent::delete($softly);
     }
 
+    public function deletePreservingReferences(): void
+    {
+        if (ovkGetQuirk("blobs.erase-upon-deletion") === 2) {
+            throw new \LogicException("Media cannot be restored when blobs are erased on deletion");
+        }
+
+        parent::deletePreservingReferences();
+    }
+
     public function undelete(): void
     {
         if (ovkGetQuirk("blobs.erase-upon-deletion") === 2) {

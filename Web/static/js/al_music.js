@@ -1797,25 +1797,26 @@ u(document).on("click", ".musicIcon.edit-icon", (e) => {
     })()
 
     u(".ovk-diag-body #_fullyDeleteAudio").on("click", (e) => {
-        MessageBox(tr('confirm'), tr('confirm_deleting_audio'), [tr('yes'), tr('no')], [() => {
-            $.ajax({
-                type: "POST",
-                url: `/audio${id}/action?act=delete`,
-                data: {
-                    hash: u("meta[name=csrf]").attr("value")
-                },
-                success: (response) => {
-                    u("body").removeClass("dimmed");
-                    u(".ovk-diag-cont").remove();
-                    document.querySelector("html").style.overflowY = "scroll"
+        $.ajax({
+            type: "POST",
+            url: `/audio${id}/action?act=delete`,
+            data: {
+                hash: u("meta[name=csrf]").attr("value")
+            },
+            success: (response) => {
+                u("body").removeClass("dimmed");
+                u(".ovk-diag-cont").remove();
+                document.querySelector("html").style.overflowY = "scroll"
 
-                    if(response.success)
-                        u(player).remove()
+                if(response.success) {
+                    if (response.restore_token)
+                        showAudioRestore(player, response.restore_token, `/audio${id}/action?act=restore_deleted`)
                     else
-                        fastError(response.flash.message)
-                }
-            });
-        }, () => {Function.noop}])
+                        u(player).remove()
+                } else
+                    fastError(response.flash.message)
+            }
+        });
     })
 })
 
@@ -1824,6 +1825,40 @@ u(document).on("click", ".title.withLyrics", (e) => {
 
     parent.querySelector(".lyrics").classList.toggle("showed")
 })
+
+function showAudioRestore(player, token, url, club = null) {
+    if (!player || !token) return;
+    const placeholder = document.createElement("div");
+    placeholder.className = "post-deleted";
+    placeholder.append(document.createTextNode(tr("audio_embed_deleted") + " "));
+    const link = document.createElement("a");
+    link.href = url;
+    link.textContent = tr("restore");
+    link.addEventListener("click", async (event) => {
+        event.preventDefault();
+        if (link.dataset.restorePending) return;
+        link.dataset.restorePending = "1";
+        try {
+            const ownerId = player.dataset.audioOwnerId;
+            const audioId = player.dataset.audioVirtualId;
+            if (!ownerId || !audioId) throw new Error(tr("invalid_audio"));
+            const restored = await window.OVKAPI.call("audio.restore", {
+                owner_id: ownerId,
+                audio_id: audioId,
+                ...(club !== null ? { group_id: club } : {}),
+                restore_token: token,
+            });
+            if (!restored?.id) throw new Error(tr("error"));
+            placeholder.replaceWith(player);
+        } catch (error) {
+            fastError(String(error));
+        } finally {
+            delete link.dataset.restorePending;
+        }
+    });
+    placeholder.append(link);
+    player.replaceWith(placeholder);
+}
 
 $(document).on("click", ".musicIcon.remove-icon", (e) => {
     e.stopImmediatePropagation()
@@ -1850,14 +1885,18 @@ $(document).on("click", ".musicIcon.remove-icon", (e) => {
                     let json = await response.json()
 
                     if(json.success) {
-                        e.target.classList.remove("remove-icon")
-                        e.target.classList.add("add-icon")
                         e.target.classList.remove("lagged")
 
                         let withd = e.target.closest(".audioEmbed.withdrawn")
 
                         if(withd != null)
                             u(withd).remove()
+                        else if (json.restore_token)
+                            showAudioRestore(e.target.closest(".audioEmbed"), json.restore_token, `/audio${id}/action?act=restore`)
+                        else {
+                            e.target.classList.remove("remove-icon")
+                            e.target.classList.add("add-icon")
+                        }
                     } else
                         fastError(json.flash.message)
                 }
@@ -1887,7 +1926,8 @@ $(document).on("click", ".musicIcon.remove-icon-group", (e) => {
                     let json = await response.json()
 
                     if(json.success)
-                        $(e.currentTarget.closest(".audioEmbed")).remove()
+                        showAudioRestore(e.currentTarget.closest(".audioEmbed"), json.restore_token,
+                            `/audio${id}/action?act=restore_club`, e.currentTarget.dataset.club)
                     else
                         fastError(json.flash.message)
                 }

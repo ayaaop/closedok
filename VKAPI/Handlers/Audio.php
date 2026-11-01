@@ -590,18 +590,50 @@ final class Audio extends VKAPIRequestHandler
             $this->fail(0o404, "Not found");
         }
 
-        $audio->remove($from);
+        if (!$audio->isInLibraryOf($from)) {
+            return 1;
+        }
+        (new \openvk\Web\Models\Restoration())->deleteAudioFromLibrary($audio, $this->getUser(), $from);
 
         return 1;
     }
 
-    public function restore(int $audio_id, int $owner_id, ?int $group_id = null, ?string $hash = null): object
+    public function restore(int $audio_id, int $owner_id, ?int $group_id = null, ?string $hash = null, ?string $restore_token = null): object
     {
         $this->requireUser();
+        $this->willExecuteWriteAction();
+        $library = $this->getUser();
+        if ($group_id !== null) {
+            $library = (new Clubs())->get($group_id);
+            if (!$library || !$library->canBeModifiedBy($this->getUser())) {
+                $this->fail(203, "Insufficient rights to this group");
+            }
+        }
+        $audio = (new Audios())->getByOwnerAndVID($owner_id, $audio_id);
+        if (!$audio) {
+            $this->fail(0o404, "Not found");
+        }
 
-        $vid = $this->add($audio_id, $owner_id, $group_id);
+        if ($audio->isDeleted()) {
+            $this->restoreDeleted($audio, $restore_token);
+        } else {
+            $session = null;
+            if (($_GET["auth_mechanism"] ?? "") === "roaming") {
+                if (($_SERVER["REQUEST_METHOD"] ?? "") !== "POST" || !($GLOBALS["csrfCheck"] ?? false) || !$restore_token) {
+                    $this->fail(15, "A valid page restore token and CSRF are required.");
+                }
+                $session = \Chandler\Session\Session::i()->get("tok");
+            }
+            try {
+                (new \openvk\Web\Models\Restoration())->restoreAudioToLibrary(
+                    $audio, $this->getUser(), $library, $session === null ? null : $restore_token, $session
+                );
+            } catch (\DomainException | \LogicException $e) {
+                $this->fail(15, $e->getMessage());
+            }
+        }
 
-        return $this->getById($vid, $hash)->items[0];
+        return $this->toSafeAudioStruct((new Audios())->getByOwnerAndVID($owner_id, $audio_id), $hash);
     }
 
     public function getAlbums(int $owner_id = 0, int $offset = 0, int $count = 50, int $drop_private = 1): object|array
